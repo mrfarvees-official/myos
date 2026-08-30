@@ -1,0 +1,7 @@
+set timeout=5
+set default=0
+
+menuentry "Install MyOS" {
+    linux /boot/vmlinuz console=ttyS0 rdinit=/init tsc=unstable
+    initrd /boot/initramfs.img
+}

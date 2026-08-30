@@ -1,0 +1,97 @@
+#!/bin/sh
+
+ARCHIVE="/media/iso/system/rootfs.tar.gz"
+TARGET="/mnt"
+
+RUNDIR="/run/myos-installer"
+LOG="$RUNDIR/installer.log"
+TARLOG="$RUNDIR/tar-files.log"
+
+mkdir -p "$RUNDIR"
+
+# Start a fresh log for this run
+: > "$LOG"
+: > "$TARLOG"
+
+if [ ! -f "$ARCHIVE" ]; then
+    printf 'error|copy|0|Root filesystem archive not found|%s\n' \
+        "$ARCHIVE" >> "$LOG"
+    exit 1
+fi
+
+printf 'stage|copy|0|Preparing root filesystem installation|\n' >> "$LOG"
+
+TOTAL=$(tar -tzf "$ARCHIVE" | wc -l)
+
+if [ "$TOTAL" -le 0 ]; then
+    printf 'error|copy|0|Root filesystem archive is empty|\n' >> "$LOG"
+    exit 1
+fi
+
+PERCENT=0
+LAST_COUNT=0
+
+tar -xzvf "$ARCHIVE" -C "$TARGET" > "$TARLOG" 2>&1 &
+
+TAR_PID=$!
+
+while kill -0 "$TAR_PID" 2>/dev/null
+do
+    CURRENT=$(wc -l < "$TARLOG")
+
+    if [ "$CURRENT" -ne "$LAST_COUNT" ]; then
+        CURRENT_FILE=$(tail -n 1 "$TARLOG")
+
+        PERCENT=$((CURRENT * 100 / TOTAL))
+
+        if [ "$PERCENT" -gt 99 ]; then
+            PERCENT=99
+        fi
+
+        printf 'file|copy|%s|Installing system files|%s\n' \
+            "$PERCENT" \
+            "$CURRENT_FILE" >> "$LOG"
+
+        LAST_COUNT="$CURRENT"
+    fi
+
+    sleep 1
+done
+
+wait "$TAR_PID"
+RESULT=$?
+
+if [ "$RESULT" -ne 0 ]; then
+    printf 'error|copy|%s|Failed to extract root filesystem|\n' \
+        "$PERCENT" >> "$LOG"
+    exit 1
+fi
+
+printf 'stage|copy|85|Root filesystem installed|\n' >> "$LOG"
+
+# ---------------------------------------------------------
+# Install GRUB
+# ---------------------------------------------------------
+
+if [ ! -x /bin/grub-setup ]; then
+    printf 'error|grub|85|GRUB setup script not found|/bin/grub-setup\n' \
+        >> "$LOG"
+    exit 1
+fi
+
+printf 'stage|grub|86|Starting GRUB installation|\n' >> "$LOG"
+
+/bin/grub-setup
+
+GRUB_RESULT=$?
+
+if [ "$GRUB_RESULT" -ne 0 ]; then
+    printf 'error|grub|90|GRUB installation failed|\n' >> "$LOG"
+    exit 1
+fi
+
+printf 'complete|done|100|MyOS installation complete|\n' >> "$LOG"
+
+sync
+
+exit 0

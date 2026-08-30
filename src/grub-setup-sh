@@ -1,0 +1,71 @@
+#!/bin/sh
+
+TARGET_DISK="/dev/vda"
+TARGET_ROOT="/mnt"
+
+RUNDIR="/run/myos-installer"
+LOG="$RUNDIR/installer.log"
+
+log()
+{
+    TYPE="$1"
+    STAGE="$2"
+    PERCENT="$3"
+    MESSAGE="$4"
+    DETAIL="$5"
+
+    printf '%s|%s|%s|%s|%s\n' \
+        "$TYPE" \
+        "$STAGE" \
+        "$PERCENT" \
+        "$MESSAGE" \
+        "$DETAIL" >> "$LOG"
+}
+
+log stage grub 90 "Preparing GRUB bootloader" "$TARGET_DISK"
+
+if [ ! -d "$TARGET_ROOT/boot" ]; then
+    log error grub 90 "Target boot directory does not exist" "$TARGET_ROOT/boot"
+    exit 1
+fi
+
+if [ ! -f "$TARGET_ROOT/boot/vmlinuz" ]; then
+    log error grub 90 "Kernel not found on installed system" "$TARGET_ROOT/boot/vmlinuz"
+    exit 1
+fi
+
+mkdir -p "$TARGET_ROOT/boot/grub"
+
+log stage grub 92 "Installing GRUB" "$TARGET_DISK"
+
+grub-install \
+    --target=i386-pc \
+    --boot-directory="$TARGET_ROOT/boot" \
+    "$TARGET_DISK"
+
+if [ $? -ne 0 ]; then
+    log error grub 92 "GRUB installation failed" "$TARGET_DISK"
+    exit 1
+fi
+
+log stage grub 96 "Creating GRUB configuration" "$TARGET_ROOT/boot/grub/grub.cfg"
+
+cat > "$TARGET_ROOT/boot/grub/grub.cfg" <<'EOF'
+set timeout=3
+set default=0
+
+menuentry "MyOS" {
+    linux /boot/vmlinuz root=/dev/vda1 rw init=/sbin/init console=ttyS0
+}
+EOF
+
+if [ $? -ne 0 ]; then
+    log error grub 96 "Failed to write GRUB configuration" ""
+    exit 1
+fi
+
+sync
+
+log stage grub 99 "GRUB installation complete" "$TARGET_DISK"
+
+exit 0

@@ -1,0 +1,82 @@
+#!/bin/sh
+
+DISK="/dev/vda"
+PART="${DISK}1"
+
+RUNDIR="/run/myos-installer"
+LOG="$RUNDIR/installer.log"
+
+mkdir -p "$RUNDIR"
+
+log()
+{
+    TYPE="$1"
+    STAGE="$2"
+    PERCENT="$3"
+    MESSAGE="$4"
+    DETAIL="$5"
+
+    printf '%s|%s|%s|%s|%s\n' \
+        "$TYPE" \
+        "$STAGE" \
+        "$PERCENT" \
+        "$MESSAGE" \
+        "$DETAIL" >> "$LOG"
+}
+
+log stage disk 1 "Preparing target disk" "$DISK"
+
+if [ ! -b "$DISK" ]; then
+    log error disk 1 "Target disk not found" "$DISK"
+    exit 1
+fi
+
+umount /mnt 2>/dev/null || true
+umount "$PART" 2>/dev/null || true
+
+log stage partition 3 "Creating partition table" "$DISK"
+
+printf 'o\nn\np\n1\n\n\nw\n' | fdisk "$DISK"
+
+if [ $? -ne 0 ]; then
+    log error partition 3 "Failed to create partition" "$DISK"
+    exit 1
+fi
+
+log stage partition 7 "Waiting for partition device" "$PART"
+
+i=0
+while [ ! -b "$PART" ]
+do
+    sleep 1
+    i=$((i + 1))
+
+    if [ "$i" -ge 10 ]; then
+        log error partition 7 "Partition device did not appear" "$PART"
+        exit 1
+    fi
+done
+
+log stage format 10 "Creating ext4 filesystem" "$PART"
+
+mkfs.ext4 -F "$PART"
+
+if [ $? -ne 0 ]; then
+    log error format 10 "Failed to create ext4 filesystem" "$PART"
+    exit 1
+fi
+
+mkdir -p /mnt
+
+log stage mount 15 "Mounting target filesystem" "$PART"
+
+mount -t ext4 "$PART" /mnt
+
+if [ $? -ne 0 ]; then
+    log error mount 15 "Failed to mount target filesystem" "$PART"
+    exit 1
+fi
+
+log stage mount 20 "Target filesystem ready" "/mnt"
+
+exit 0

@@ -1,0 +1,49 @@
+#!/bin/sh
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+
+mkdir -p /run/myos-installer
+mkdir -p /media/iso
+mkdir -p /mnt
+
+clear
+
+echo "======================================"
+echo "           MyOS Installer"
+echo "======================================"
+echo
+
+echo "Kernel:"
+uname -r
+
+echo
+echo "Available disks:"
+cat /proc/partitions
+
+echo
+echo "Mounting installation media..."
+
+if mount -t iso9660 /dev/sr0 /media/iso
+then
+    echo "Installation media mounted."
+else
+    echo "ERROR: Cannot mount installation media."
+fi
+
+echo
+
+if [ -f /media/iso/system/rootfs.tar.gz ]; then
+    echo "Root filesystem found."
+else
+    echo "ERROR: rootfs.tar.gz not found."
+fi
+
+echo
+
+exec setsid cttyhack /bin/sh

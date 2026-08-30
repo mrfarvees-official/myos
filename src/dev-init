@@ -1,0 +1,55 @@
+#!/bin/sh
+
+PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export PATH
+
+echo
+echo "========================================"
+echo "       MyOS Development Environment"
+echo "========================================"
+echo
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+mount -t tmpfs tmpfs /run 2>/dev/null || true
+mount -t tmpfs tmpfs /tmp 2>/dev/null || true
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts 2>/dev/null || true
+
+echo "[+] Configuring network..."
+
+ip link set lo up
+
+if ip link show eth0 >/dev/null 2>&1; then
+    ip link set eth0 up
+
+    udhcpc \
+        -i eth0 \
+        -s /etc/udhcpc/default.script \
+        -q \
+        -n \
+        -t 5 \
+        -T 2
+
+    echo "DHCP DNS: $dns"
+    
+else
+    echo "[!] eth0 not found"
+fi
+
+hostname myos-dev
+
+echo "Kernel:"
+uname -a
+
+echo
+echo "Userspace programs:"
+ls -1 /usr/bin 2>/dev/null
+
+echo
+echo "Development shell ready."
+echo "Programs are available under /usr/bin"
+echo
+
+exec /bin/sh

@@ -1,0 +1,34 @@
+#!/bin/sh
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+
+echo "[rcS] Starting MyOS userspace..."
+
+# Mount proc first because later boot logic relies on it.
+mount -t proc proc /proc 2>/dev/null || true
+
+# Kernel/sysfs interface.
+mount -t sysfs sysfs /sys 2>/dev/null || true
+
+# /dev may already be devtmpfs from early boot.
+grep -qs ' /dev ' /proc/mounts || \
+    mount -t devtmpfs devtmpfs /dev
+
+# Runtime volatile filesystem.
+grep -qs ' /run ' /proc/mounts || \
+    mount -t tmpfs tmpfs /run
+
+mkdir -p /run/lock
+mkdir -p /var/run
+mkdir -p /var/log
+
+# Configure hostname.
+if [ -r /etc/hostname ]; then
+    hostname "$(cat /etc/hostname)"
+fi
+
+echo "[rcS] Hostname: $(hostname)"
+echo "[rcS] MyOS initialization complete."
+
+exit 0

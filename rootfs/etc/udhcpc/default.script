@@ -1,0 +1,50 @@
+#!/bin/sh
+
+RESOLV_CONF="/etc/resolv.conf"
+
+case "$1" in 
+    deconfig)
+        ip addr flush dev "$interface"
+        ip link set "$interface" up
+        ;;
+
+    bound|renew)
+        ip addr flush dev "$interface"
+        ip addr add "$ip/${mask:-24}" dev "$interface"
+        ip link set "$interface" up
+
+        if [ -n "$router" ]; then 
+            ip route del default 2>/dev/null || true
+
+            for r in $router; do
+                ip route add default via "$r" dev "$interface"
+                break
+            done
+        fi
+
+        : > "$RESOLV_CONF"
+
+        if [ -n "$domain" ]; then
+            echo "search $domain" >> "$RESOLV_CONF"
+        fi
+
+        if [ -n "$dns" ]; then
+            for dns_server in $dns; do
+                echo "nameserver $dns_server" >> "$RESOLV_CONF"
+            done
+        else
+            echo "nameserver 10.0.2.3" > /etc/resolv.conf
+        fi 
+        ;;
+
+    leasefail|nak)
+        echo "DHCP lease failed on $interface"
+        ;;
+
+    *)
+        echo "Unknown udhcpc action: $1"
+        ;;
+
+esac
+
+exit 0
