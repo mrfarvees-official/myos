@@ -63,6 +63,20 @@ DISK_IMAGE := $(OUTPUT_DIR)/myos-disk.img
 
 
 # =========================================================
+# DESKTOP PROJECT
+# =========================================================
+
+DESKTOP_SRC_DIR   := src/desktop
+DESKTOP_BUILD_DIR := build/desktop
+DESKTOP_BINARY    := $(DESKTOP_BUILD_DIR)/myos-desktop
+
+DESKTOP_SOURCES := $(shell find $(DESKTOP_SRC_DIR) -type f -name '*.cpp' 2>/dev/null)
+
+DESKTOP_OBJECTS := \
+	$(patsubst $(DESKTOP_SRC_DIR)/%.cpp,$(DESKTOP_BUILD_DIR)/%.o,$(DESKTOP_SOURCES))
+
+
+# =========================================================
 # USERSPACE PROGRAM DISCOVERY
 # =========================================================
 
@@ -84,6 +98,13 @@ PROGRAMS := $(sort $(C_PROGRAMS) $(CPP_PROGRAMS))
 
 CFLAGS   ?= -static -O2 -Wall -Wextra
 CXXFLAGS ?= -static -std=c++17 -O2 -Wall -Wextra
+DESKTOP_CXXFLAGS := \
+	-static \
+	-std=c++17 \
+	-O2 \
+	-Wall \
+	-Wextra \
+	-I$(DESKTOP_SRC_DIR)
 
 
 # =========================================================
@@ -112,12 +133,13 @@ QEMU_COMMON := \
 	install_initramfs_programs \
 	build_initramfs_img \
 	build_dev_initramfs_img \
-	dev dev_shell \
+	dev dev_shell dev_gui \
 	boot run \
 	iso_structure clean_iso build_iso \
 	disk recreate_disk clean_disk \
 	boot_iso test_disk \
-	clean distclean
+	clean distclean \
+	desktop build_desktop clean_desktop
 
 
 # =========================================================
@@ -202,6 +224,40 @@ $(PROGRAM_BUILD_DIR)/%: $(PROGRAM_SRC_DIR)/%.cpp
 clean_programs:
 	rm -rf "$(PROGRAM_BUILD_DIR)"
 
+# =========================================================
+# MYOS DESKTOP
+# =========================================================
+
+desktop: build_desktop
+
+
+build_desktop: check_host $(DESKTOP_BINARY)
+	@echo "[+] MyOS desktop ready."
+	@echo "    $(DESKTOP_BINARY)"
+
+
+$(DESKTOP_BUILD_DIR)/%.o: $(DESKTOP_SRC_DIR)/%.cpp
+	@echo "[+] Compiling desktop source: $<"
+
+	@mkdir -p "$(dir $@)"
+
+	$(CXX) $(DESKTOP_CXXFLAGS) -c "$<" -o "$@"
+
+
+$(DESKTOP_BINARY): $(DESKTOP_OBJECTS)
+	@echo "[+] Linking MyOS desktop..."
+
+	@mkdir -p "$(DESKTOP_BUILD_DIR)"
+
+	$(CXX) -static $(DESKTOP_OBJECTS) -o "$(DESKTOP_BINARY)"
+
+	@chmod 755 "$(DESKTOP_BINARY)"
+
+	@echo "[+] Built: $(DESKTOP_BINARY)"
+
+
+clean_desktop:
+	rm -rf "$(DESKTOP_BUILD_DIR)"
 
 # =========================================================
 # INSTALLED ROOT FILESYSTEM
@@ -334,7 +390,7 @@ prepare_rootfs: check_host
 # COPY COMPILED PROGRAMS INTO ROOTFS
 # =========================================================
 
-sync_rootfs_programs: prepare_rootfs build_programs
+sync_rootfs_programs: prepare_rootfs build_programs build_desktop
 	@echo "[+] Synchronizing MyOS programs into rootfs/usr/bin..."
 
 	@mkdir -p rootfs/usr/bin
@@ -345,6 +401,12 @@ sync_rootfs_programs: prepare_rootfs build_programs
 			cp -a "$$program" "rootfs/usr/bin/$$name"; \
 			chmod 755 "rootfs/usr/bin/$$name"; \
 		done; \
+	fi
+
+	@if [ -x "$(DESKTOP_BINARY)" ]; then \
+		echo "[+] Installing MyOS desktop..."; \
+		cp -a "$(DESKTOP_BINARY)" rootfs/usr/bin/myos-desktop; \
+		chmod 755 rootfs/usr/bin/myos-desktop; \
 	fi
 
 	@echo "[+] Rootfs userspace programs synchronized."
@@ -758,10 +820,30 @@ dev: build_dev_initramfs_img
 		-append "console=ttyS0 rdinit=/init" \
 		-netdev user,id=myosnet,hostfwd=tcp:127.0.0.1:2222-:22 \
 		-device virtio-net-pci,netdev=myosnet \
-		-nographic
-
+        -nographic
 
 dev_shell: dev
+
+# =========================================================
+# GRAPHICAL DEVELOPMENT BOOT
+# =========================================================
+
+dev_gui: build_dev_initramfs_img
+	@echo
+	@echo "[+] Booting MyOS graphical development environment..."
+	@echo "[+] Serial console remains available in this terminal."
+	@echo
+
+	$(QEMU) \
+		-m $(QEMU_MEMORY) \
+		-kernel "$(KERNEL)" \
+		-initrd "$(DEV_INITRAMFS)" \
+		-append "console=ttyS0 rdinit=/init" \
+		-netdev user,id=myosnet,hostfwd=tcp:127.0.0.1:2222-:22 \
+		-device virtio-net-pci,netdev=myosnet \
+		-device VGA \
+		-display gtk \
+		-serial stdio
 
 
 # =========================================================
@@ -918,7 +1000,7 @@ test_disk:
 #
 # =========================================================
 
-clean: clean_iso
+clean: clean_iso clean_programs clean_desktop
 	rm -rf "$(INSTALLER_DIR)"
 	rm -rf "$(INITRAMFS_DIR)"
 	rm -rf "$(DEV_INITRAMFS_DIR)"
