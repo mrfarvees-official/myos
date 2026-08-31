@@ -31,4 +31,6 @@ fi
 echo "[rcS] Hostname: $(hostname)"
 echo "[rcS] MyOS initialization complete."
 
+/usr/bin/myos-desktop
+
 exit 0

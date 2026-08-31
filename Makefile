@@ -651,7 +651,7 @@ copy_grub: copy_mkfs_ext4
 #
 # =========================================================
 
-install_initramfs_programs: copy_grub build_programs
+install_initramfs_programs: copy_grub build_programs build_desktop
 	@echo "[+] Installing MyOS programs into installer initramfs..."
 
 	@mkdir -p "$(INITRAMFS_DIR)/usr/bin"
@@ -664,13 +664,10 @@ install_initramfs_programs: copy_grub build_programs
 		done; \
 	fi
 
-	@for program in $(PROGRAMS); do \
-		name=$$(basename "$$program"); \
-		test -x "$(INITRAMFS_DIR)/usr/bin/$$name" || { \
-			echo "ERROR: installer initramfs program $$name missing"; \
-			exit 1; \
-		}; \
-	done
+	@if [ -x "$(DESKTOP_BINARY)" ]; then \
+		cp -a "$(DESKTOP_BINARY)" "$(INITRAMFS_DIR)/usr/bin/myos-desktop"; \
+		chmod 755 "$(INITRAMFS_DIR)/usr/bin/myos-desktop"; \
+	fi
 
 	@echo "[+] Installer userspace programs ready."
 
@@ -842,7 +839,7 @@ dev_gui: build_dev_initramfs_img
 		-netdev user,id=myosnet,hostfwd=tcp:127.0.0.1:2222-:22 \
 		-device virtio-net-pci,netdev=myosnet \
 		-device VGA \
-		-display gtk \
+		-display gtk,grab-on-hover=on \
 		-serial stdio
 
 
@@ -968,7 +965,8 @@ boot_iso: build_iso disk
 		-cdrom "$(ISO_IMAGE)" \
 		-drive file="$(DISK_IMAGE)",format=raw,if=virtio \
 		-boot d \
-
+		-device VGA \
+		-display gtk \
 		-serial stdio
 
 
@@ -984,6 +982,8 @@ test_disk:
 		-m $(QEMU_MEMORY) \
 		-drive file="$(DISK_IMAGE)",format=raw,if=virtio \
 		-boot c \
+		-device VGA \
+		-display gtk \
 		-serial stdio
 
 

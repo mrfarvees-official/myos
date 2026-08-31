@@ -1,4 +1,5 @@
 /output
 /installer
+/initramfs
 /build
 /src/third_party
