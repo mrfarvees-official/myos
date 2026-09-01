@@ -78,6 +78,22 @@ const Window *WindowManager::focusedWindow() const {
 
 void WindowManager::handleEvent(const InputEvent &event)
 {
+    // -----------------------------------
+    // Keyboard shortcuts
+    // -----------------------------------
+
+    if (event.type == InputEventType::KeyDown &&
+        event.alt &&
+        event.key == Key::Tab)
+    {
+        focusNextWindow();
+        return;
+    }
+
+    // -----------------------------------
+    // Left mouse button pressed
+    // -----------------------------------
+
     if (event.type == InputEventType::MouseButtonDown &&
         event.mouseButton == MouseButton::Left)
     {
@@ -95,7 +111,8 @@ void WindowManager::handleEvent(const InputEvent &event)
             return;
         }
 
-        if (window->titleBarBounds().contains(event.mousePosition)) {
+        if (window->titleBarContains(event.mousePosition))
+        {
             m_draggedWindo = window;
 
             const Rect &bounds = window->bounds();
@@ -105,6 +122,34 @@ void WindowManager::handleEvent(const InputEvent &event)
                 event.mousePosition.y - bounds.y
             };
         }
+
+        return;
+    }
+
+    // -----------------------------------
+    // Mouse moving during drag
+    // -----------------------------------
+
+    if (event.type == InputEventType::MouseMove &&
+        m_draggedWindo != nullptr)
+    {
+        m_draggedWindo->setPosition(
+            event.mousePosition.x - m_dragOffset.x,
+            event.mousePosition.y - m_dragOffset.y
+        );
+
+        return;
+    }
+
+    // -----------------------------------
+    // Left mouse released
+    // -----------------------------------
+
+    if (event.type == InputEventType::MouseButtonUp &&
+        event.mouseButton == MouseButton::Left)
+    {
+        m_draggedWindo = nullptr;
+        return;
     }
 }
 

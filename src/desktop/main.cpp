@@ -48,7 +48,7 @@ int main()
         std::cerr << "[desktop] Failed to open mouse input.\n";
     }
 
-    if (!inputManager.openKeyboard("/dev/input/event0")) {
+    if (!inputManager.openKeyboard("/dev/input/event2")) {
         std::cerr << "[desktop] Failed to open keyboard input.\n";
     }
 
@@ -89,6 +89,32 @@ int main()
         InputEvent event;
 
         while (inputManager.pollEvent(event)) {
+
+            if (event.type == InputEventType::MouseMove) {
+                std::cout
+                    << "[input] mouse "
+                    << event.mousePosition.x << ", "
+                    << event.mousePosition.y
+                    << "\n";
+            }
+
+            if (event.type == InputEventType::MouseButtonDown) {
+                std::cout << "[input] mouse button down\n";
+            }
+
+            if (event.type == InputEventType::MouseButtonUp) {
+                std::cout << "[input] mouse button up\n";
+            }
+
+            if (event.type == InputEventType::KeyDown) {
+                std::cout
+                    << "[input] key down"
+                    << " alt=" << event.alt
+                    << " ctrl=" << event.ctrl
+                    << " shift=" << event.shift
+                    << "\n";
+            }
+
             windowManager.handleEvent(event);
         }
 

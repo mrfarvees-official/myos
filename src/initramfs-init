@@ -46,6 +46,4 @@ fi
 
 echo
 
-/usr/bin/myos-desktop
-
 exec setsid cttyhack /bin/sh

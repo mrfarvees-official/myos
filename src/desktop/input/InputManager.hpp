@@ -23,4 +23,6 @@ class InputManager
         int m_screenHeight = 0;
         Point m_mousePosition {};
         bool m_altDown = false;
+        bool m_ctrlDown = false;
+        bool m_shiftDown = false;
 };

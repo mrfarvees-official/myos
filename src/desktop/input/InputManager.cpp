@@ -7,6 +7,57 @@
 #include <algorithm>
 #include <cstring>
 
+static Key translateKey(unsigned int code)
+{
+    switch (code)
+    {
+        case KEY_TAB:
+            return Key::Tab;
+
+        case KEY_ENTER:
+            return Key::Enter;
+
+        case KEY_ESC:
+            return Key::Escape;
+
+        case KEY_SPACE:
+            return Key::Space;
+
+        case KEY_LEFT:
+            return Key::Left;
+
+        case KEY_RIGHT:
+            return Key::Right;
+
+        case KEY_UP:
+            return Key::Up;
+
+        case KEY_DOWN:
+            return Key::Down;
+
+        case KEY_LEFTALT:
+            return Key::LeftAlt;
+
+        case KEY_RIGHTALT:
+            return Key::RightAlt;
+
+        case KEY_LEFTCTRL:
+            return Key::LeftCtrl;
+
+        case KEY_RIGHTCTRL:
+            return Key::RightCtrl;
+
+        case KEY_LEFTSHIFT:
+            return Key::LeftShift;
+
+        case KEY_RIGHTSHIFT:
+            return Key::RightShift;
+
+        default:
+            return Key::Unknown;
+    }
+}
+
 InputManager::InputManager(
     int screenWidth,
     int screenHeight
@@ -169,8 +220,10 @@ bool InputManager::pollEvent(InputEvent &event)
         if (bytesRead == sizeof(linuxEvent)) {
             if (linuxEvent.type == EV_KEY) {
                 // Track Alt State
-                if (linuxEvent.code == KEY_LEFTALT || linuxEvent.code == KEY_RIGHTALT) {
-                    if (linuxEvent.value == 1 ) {
+                if (linuxEvent.code == KEY_LEFTALT ||
+                    linuxEvent.code == KEY_RIGHTALT)
+                {
+                    if (linuxEvent.value == 1) {
                         m_altDown = true;
                     }
 
@@ -179,9 +232,38 @@ bool InputManager::pollEvent(InputEvent &event)
                     }
                 }
 
+                // Track Ctrl State
+                if (linuxEvent.code == KEY_LEFTCTRL ||
+                    linuxEvent.code == KEY_RIGHTCTRL)
+                {
+                    if (linuxEvent.value == 1) {
+                        m_ctrlDown = true;
+                    }
+
+                    if (linuxEvent.value == 0) {
+                        m_ctrlDown = false;
+                    }
+                }
+
+                // Track Shift State
+                if (linuxEvent.code == KEY_LEFTSHIFT ||
+                    linuxEvent.code == KEY_RIGHTSHIFT)
+                {
+                    if (linuxEvent.value == 1) {
+                        m_shiftDown = true;
+                    }
+
+                    if (linuxEvent.value == 0) {
+                        m_shiftDown = false;
+                    }
+                }
+
                 event = InputEvent{};
-                event.keyCode = linuxEvent.code;
+                event.key = translateKey(linuxEvent.code);
+                
                 event.alt = m_altDown;
+                event.ctrl = m_ctrlDown;
+                event.shift = m_shiftDown;
 
                 if (linuxEvent.value == 1) {
                     event.type = InputEventType::KeyDown;

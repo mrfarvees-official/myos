@@ -21,6 +21,30 @@ enum class MouseButton
     Forward
 };
 
+enum class Key 
+{
+    Unknown,
+
+    Tab,
+    Enter,
+    Escape,
+    Space,
+
+    Left,
+    Right,
+    Up,
+    Down,
+
+    LeftAlt,
+    RightAlt,
+
+    LeftCtrl,
+    RightCtrl,
+
+    LeftShift,
+    RightShift
+};
+
 struct InputEvent
 {
     InputEventType type;
@@ -29,7 +53,7 @@ struct InputEvent
 
     MouseButton mouseButton = MouseButton::None;
 
-    int keyCode = 0;
+    Key key = Key::Unknown;
 
     bool alt = false;
     bool ctrl = false;
