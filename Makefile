@@ -833,6 +833,9 @@ dev_gui: build_dev_initramfs_img
 
 	$(QEMU) \
 		-m $(QEMU_MEMORY) \
+		-smp 2 \
+		-accel kvm \
+		-cpu host \
 		-kernel "$(KERNEL)" \
 		-initrd "$(DEV_INITRAMFS)" \
 		-append "console=ttyS0 rdinit=/init" \

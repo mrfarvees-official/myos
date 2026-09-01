@@ -101,34 +101,72 @@ namespace myos::graphics {
         return bitsPerPixel_;
     }
 
-    bool Framebuffer::present(const Surface &surface)
+    bool Framebuffer::present(
+        const Surface& surface
+    )
     {
         if (memory_ == nullptr) {
             return false;
         }
 
         if (bitsPerPixel_ != 32) {
-            std::cerr << "[desktop] Currently only 32-bit framebuffer is supported\n";
+            std::cerr
+                << "[desktop] Currently only 32-bit framebuffer is supported\n";
+
             return false;
         }
-        
-        const int copyWidth = std::min(width_, surface.width());
-        const int copyHeight = std::min(height_, surface.height());
 
-        for (int y = 0; y < copyHeight; ++y) {
-            uint8_t *destination = 
-                memory_ + 
-                static_cast<std::size_t>(y) * 
+        const int copyWidth =
+            std::min(width_, surface.width());
+
+        const int copyHeight =
+            std::min(height_, surface.height());
+
+        const std::size_t rowBytes =
+            static_cast<std::size_t>(copyWidth) * 4;
+
+        if (
+            copyWidth == width_ &&
+            copyWidth == surface.width() &&
+            lineLength_ == static_cast<int>(rowBytes)
+        ) {
+            const std::size_t totalBytes =
+                rowBytes *
+                static_cast<std::size_t>(copyHeight);
+
+            std::memcpy(
+                memory_,
+                surface.pixels(),
+                totalBytes
+            );
+
+            return true;
+        }
+
+        for (
+            int y = 0;
+            y < copyHeight;
+            ++y
+        ) {
+            uint8_t* destination =
+                memory_ +
+                static_cast<std::size_t>(y) *
                 static_cast<std::size_t>(lineLength_);
 
-            const uint8_t *source = 
+            const uint8_t* source =
                 reinterpret_cast<const uint8_t*>(
-                    surface.pixels() + 
+                    surface.pixels() +
                     static_cast<std::size_t>(y) *
-                    static_cast<std::size_t>(surface.width())
+                    static_cast<std::size_t>(
+                        surface.width()
+                    )
                 );
-            
-            std::memcpy(destination, source, static_cast<std::size_t>(copyWidth) * 4);
+
+            std::memcpy(
+                destination,
+                source,
+                rowBytes
+            );
         }
 
         return true;

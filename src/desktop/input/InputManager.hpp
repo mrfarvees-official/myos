@@ -54,6 +54,11 @@ private:
     bool m_ctrlDown = false;
     bool m_shiftDown = false;
 
+    int m_pendingMouseDeltaX = 0;
+    int m_pendingMouseDeltaY = 0;
+
+    bool m_mouseMoved = false;
+
     std::atomic<bool> m_running { false };
 
     std::thread m_workerThread;

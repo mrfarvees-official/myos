@@ -34,24 +34,62 @@ namespace myos::graphics {
     void Renderer::fillRect(
         int x,
         int y,
-        int width, 
+        int width,
         int height,
-        const Color &color
-    ) {
+        const Color& color
+    )
+    {
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        const int surfaceWidth = surface_.width();
+        const int surfaceHeight = surface_.height();
+
         const int startX = std::max(0, x);
         const int startY = std::max(0, y);
 
-        const int endX = std::min(surface_.width(), x + width);
-        const int endY = std::min(surface_.height(), y + height);
+        const int endX = std::min(
+            surfaceWidth,
+            x + width
+        );
 
-        for (int py = startY; py < endY; ++py) {
-            for (int px = startX; px < endX; ++px) {
-                drawPixel(
-                    px,
-                    py,
-                    color
-                );
-            }
+        const int endY = std::min(
+            surfaceHeight,
+            y + height
+        );
+
+        if (
+            startX >= endX ||
+            startY >= endY
+        ) {
+            return;
+        }
+
+        uint32_t* pixels = surface_.pixels();
+
+        const uint32_t pixelColor =
+            color.toARGB();
+
+        const int rowWidth =
+            endX - startX;
+
+        for (
+            int py = startY;
+            py < endY;
+            ++py
+        ) {
+            uint32_t* row =
+                pixels +
+                static_cast<std::size_t>(py) *
+                    static_cast<std::size_t>(surfaceWidth) +
+                static_cast<std::size_t>(startX);
+
+            std::fill_n(
+                row,
+                rowWidth,
+                pixelColor
+            );
         }
     }
 }

@@ -10,6 +10,8 @@
 
 #include <iostream>
 #include <unistd.h>
+#include <chrono>
+#include <thread>
 
 using namespace myos::graphics;
 
@@ -176,39 +178,28 @@ int main()
     std::cout
         << "[desktop] Entering desktop loop.\n";
 
+    using Clock = std::chrono::steady_clock;
+
+    constexpr auto frameDuration =
+        std::chrono::microseconds(16667);
+
     while (true)
     {
-        // -------------------------
-        // Input
-        // -------------------------
+        auto frameStart = Clock::now();
 
         InputEvent event;
 
-        while (
-            inputManager.popEvent(event)
-        ) {
+        while (inputManager.popEvent(event)) {
             windowManager.handleEvent(event);
         }
-
-        // -------------------------
-        // Desktop background
-        // -------------------------
 
         renderer.clear(
             Color(24, 28, 36)
         );
 
-        // -------------------------
-        // Windows
-        // -------------------------
-
         windowManager.render(
             renderer
         );
-
-        // -------------------------
-        // Taskbar
-        // -------------------------
 
         renderer.fillRect(
             0,
@@ -218,22 +209,12 @@ int main()
             Color(18, 20, 26)
         );
 
-        // -------------------------
-        // Mouse cursor
-        // -------------------------
-
         drawCursor(
             renderer,
             mouse.position()
         );
 
-        // -------------------------
-        // Present
-        // -------------------------
-
-        if (
-            !framebuffer.present(screen)
-        ) {
+        if (!framebuffer.present(screen)) {
             std::cerr
                 << "[desktop] Failed to present framebuffer.\n";
 
@@ -242,8 +223,17 @@ int main()
             return 1;
         }
 
-        usleep(16000);
-    }
+        auto frameEnd = Clock::now();
 
+        auto elapsed =
+            frameEnd - frameStart;
+
+        if (elapsed < frameDuration) {
+            std::this_thread::sleep_for(
+                frameDuration - elapsed
+            );
+        }
+    }
+    
     return 0;
 }

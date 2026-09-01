@@ -252,29 +252,43 @@ void InputManager::handleMouseEvent(
     int value
 )
 {
-    // -------------------------
-    // Relative movement
-    // -------------------------
+    // --------------------------------
+    // Accumulate relative movement
+    // --------------------------------
 
-    if (type == EV_REL) {
-
-        int deltaX = 0;
-        int deltaY = 0;
-
-        if (code == REL_X) {
-            deltaX = value;
+    if (type == EV_REL)
+    {
+        if (code == REL_X)
+        {
+            m_pendingMouseDeltaX += value;
+            m_mouseMoved = true;
         }
-        else if (code == REL_Y) {
-            deltaY = value;
+        else if (code == REL_Y)
+        {
+            m_pendingMouseDeltaY += value;
+            m_mouseMoved = true;
         }
-        else {
+
+        return;
+    }
+
+    // --------------------------------
+    // Finish one Linux mouse report
+    // --------------------------------
+    if (type == EV_SYN && code == SYN_REPORT)
+    {
+        if (!m_mouseMoved) {
             return;
         }
 
         m_mouse.moveRelative(
-            deltaX,
-            deltaY
+            m_pendingMouseDeltaX,
+            m_pendingMouseDeltaY
         );
+
+        m_pendingMouseDeltaX = 0;
+        m_pendingMouseDeltaY = 0;
+        m_mouseMoved = false;
 
         InputEvent event {};
 
@@ -290,7 +304,7 @@ void InputManager::handleMouseEvent(
     }
 
     // -------------------------
-    // Buttons
+    // Mouse Buttons
     // -------------------------
 
     if (type != EV_KEY) {
