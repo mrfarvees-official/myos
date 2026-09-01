@@ -3,3 +3,4 @@
 /initramfs
 /build
 /src/third_party
+/rootfs/usr/bin/
