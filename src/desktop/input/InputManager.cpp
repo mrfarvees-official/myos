@@ -38,7 +38,12 @@ bool InputManager::openMouse(const char* devicePath)
         O_RDONLY | O_NONBLOCK
     );
 
-    return m_mouseFd >= 0;
+    if (m_mouseFd < 0) {
+        perror("[input] openMouse");
+        return false;
+    }
+
+    return true;
 }
 
 bool InputManager::openKeyboard(const char* devicePath)
@@ -52,7 +57,12 @@ bool InputManager::openKeyboard(const char* devicePath)
         O_RDONLY | O_NONBLOCK
     );
 
-    return m_keyboardFd >= 0;
+    if (m_keyboardFd < 0) {
+        perror("[input] openKeyboard");
+        return false;
+    }
+
+    return true;
 }
 
 bool InputManager::start()

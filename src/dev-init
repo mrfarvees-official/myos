@@ -52,6 +52,27 @@ echo "Development shell ready."
 echo "Programs are available under /usr/bin"
 echo
 
+echo
+echo "Development shell ready."
+echo "Programs are available under /usr/bin"
+echo
+
+echo "[+] Waiting for input devices..."
+
+for i in $(seq 1 20); do
+    if [ -e /dev/input/event1 ] && [ -e /dev/input/event2 ]; then
+        break
+    fi
+
+    sleep 0.05
+done
+
+if [ ! -e /dev/input/event1 ] || [ ! -e /dev/input/event2 ]; then
+    echo "[!] Input devices not ready"
+else
+    echo "[+] Input devices ready"
+fi
+
 /usr/bin/myos-desktop
 
 exec /bin/sh
