@@ -1,7 +1,7 @@
 #include "WindowManager.hpp"
 
 #include <algorithm>
-
+#include <iostream>
 #include "../graphics/Renderer.hpp"
 
 Window &WindowManager::createWindow(
@@ -82,10 +82,13 @@ void WindowManager::handleEvent(const InputEvent &event)
     // Keyboard shortcuts
     // -----------------------------------
 
-    if (event.type == InputEventType::KeyDown &&
-        event.alt &&
-        event.key == Key::Tab)
-    {
+    if (
+        event.type == InputEventType::KeyDown &&
+        event.ctrl &&
+        event.key == Key::Enter
+    ) {
+        std::cout << "[wm] Ctrl+Enter detected\n";
+
         focusNextWindow();
         return;
     }
@@ -175,15 +178,33 @@ const Window *WindowManager::windowAt(Point position) const
     return nullptr;
 }
 
-void WindowManager::focusNextWindow() 
+void WindowManager::focusNextWindow()
 {
     if (m_windows.size() < 2) {
         return;
     }
 
-    const int nextWindowId = m_windows[m_windows.size() - 2]->id();
+    // The window at the end is currently on top/focused.
+    // Move it to the bottom of the z-order.
+    auto currentWindow = std::move(m_windows.back());
 
-    focusWindow(nextWindowId);
+    m_windows.pop_back();
+
+    m_windows.insert(
+        m_windows.begin(),
+        std::move(currentWindow)
+    );
+
+    // The new last window becomes focused.
+    for (auto& window : m_windows) {
+        window->setFocused(false);
+    }
+
+    Window* nextWindow = m_windows.back().get();
+
+    nextWindow->setFocused(true);
+
+    m_focusedWindowId = nextWindow->id();
 }
 
 void WindowManager::render(myos::graphics::Renderer &renderer) const {

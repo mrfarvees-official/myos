@@ -2,15 +2,458 @@
 
 #include <fcntl.h>
 #include <linux/input.h>
+#include <poll.h>
 #include <unistd.h>
 
-#include <algorithm>
-#include <cstring>
+#include <cerrno>
 
-static Key translateKey(unsigned int code)
+InputManager::InputManager(Mouse& mouse)
+    : m_mouse(mouse)
 {
-    switch (code)
-    {
+}
+
+InputManager::~InputManager()
+{
+    stop();
+
+    if (m_mouseFd >= 0) {
+        close(m_mouseFd);
+        m_mouseFd = -1;
+    }
+
+    if (m_keyboardFd >= 0) {
+        close(m_keyboardFd);
+        m_keyboardFd = -1;
+    }
+}
+
+bool InputManager::openMouse(const char* devicePath)
+{
+    if (m_mouseFd >= 0) {
+        close(m_mouseFd);
+    }
+
+    m_mouseFd = open(
+        devicePath,
+        O_RDONLY | O_NONBLOCK
+    );
+
+    return m_mouseFd >= 0;
+}
+
+bool InputManager::openKeyboard(const char* devicePath)
+{
+    if (m_keyboardFd >= 0) {
+        close(m_keyboardFd);
+    }
+
+    m_keyboardFd = open(
+        devicePath,
+        O_RDONLY | O_NONBLOCK
+    );
+
+    return m_keyboardFd >= 0;
+}
+
+bool InputManager::start()
+{
+    if (m_running.load()) {
+        return true;
+    }
+
+    if (
+        m_mouseFd < 0 &&
+        m_keyboardFd < 0
+    ) {
+        return false;
+    }
+
+    m_running.store(true);
+
+    m_workerThread = std::thread(
+        &InputManager::workerLoop,
+        this
+    );
+
+    return true;
+}
+
+void InputManager::stop()
+{
+    if (!m_running.load()) {
+        return;
+    }
+
+    m_running.store(false);
+
+    if (m_workerThread.joinable()) {
+        m_workerThread.join();
+    }
+}
+
+bool InputManager::popEvent(InputEvent& event)
+{
+    std::lock_guard<std::mutex> lock(
+        m_queueMutex
+    );
+
+    if (m_eventQueue.empty()) {
+        return false;
+    }
+
+    event = m_eventQueue.front();
+
+    m_eventQueue.pop();
+
+    return true;
+}
+
+void InputManager::pushEvent(
+    const InputEvent& event
+)
+{
+    std::lock_guard<std::mutex> lock(
+        m_queueMutex
+    );
+
+    m_eventQueue.push(event);
+}
+
+void InputManager::workerLoop()
+{
+    pollfd fds[2] {};
+
+    fds[0].fd = m_keyboardFd;
+    fds[0].events = POLLIN;
+
+    fds[1].fd = m_mouseFd;
+    fds[1].events = POLLIN;
+
+    while (m_running.load()) {
+
+        int result = poll(
+            fds,
+            2,
+            100
+        );
+
+        if (!m_running.load()) {
+            break;
+        }
+
+        if (result < 0) {
+
+            if (errno == EINTR) {
+                continue;
+            }
+
+            continue;
+        }
+
+        if (result == 0) {
+            continue;
+        }
+
+        // -------------------------
+        // Keyboard
+        // -------------------------
+
+        if (
+            m_keyboardFd >= 0 &&
+            (fds[0].revents & POLLIN)
+        ) {
+            while (true) {
+
+                input_event linuxEvent {};
+
+                ssize_t bytesRead = read(
+                    m_keyboardFd,
+                    &linuxEvent,
+                    sizeof(linuxEvent)
+                );
+
+                if (
+                    bytesRead ==
+                    sizeof(linuxEvent)
+                ) {
+                    handleKeyboardEvent(
+                        linuxEvent.type,
+                        linuxEvent.code,
+                        linuxEvent.value
+                    );
+
+                    continue;
+                }
+
+                if (
+                    bytesRead < 0 &&
+                    (
+                        errno == EAGAIN ||
+                        errno == EWOULDBLOCK
+                    )
+                ) {
+                    break;
+                }
+
+                break;
+            }
+        }
+
+        // -------------------------
+        // Mouse
+        // -------------------------
+
+        if (
+            m_mouseFd >= 0 &&
+            (fds[1].revents & POLLIN)
+        ) {
+            while (true) {
+
+                input_event linuxEvent {};
+
+                ssize_t bytesRead = read(
+                    m_mouseFd,
+                    &linuxEvent,
+                    sizeof(linuxEvent)
+                );
+
+                if (
+                    bytesRead ==
+                    sizeof(linuxEvent)
+                ) {
+                    handleMouseEvent(
+                        linuxEvent.type,
+                        linuxEvent.code,
+                        linuxEvent.value
+                    );
+
+                    continue;
+                }
+
+                if (
+                    bytesRead < 0 &&
+                    (
+                        errno == EAGAIN ||
+                        errno == EWOULDBLOCK
+                    )
+                ) {
+                    break;
+                }
+
+                break;
+            }
+        }
+    }
+}
+
+void InputManager::handleMouseEvent(
+    unsigned short type,
+    unsigned short code,
+    int value
+)
+{
+    // -------------------------
+    // Relative movement
+    // -------------------------
+
+    if (type == EV_REL) {
+
+        int deltaX = 0;
+        int deltaY = 0;
+
+        if (code == REL_X) {
+            deltaX = value;
+        }
+        else if (code == REL_Y) {
+            deltaY = value;
+        }
+        else {
+            return;
+        }
+
+        m_mouse.moveRelative(
+            deltaX,
+            deltaY
+        );
+
+        InputEvent event {};
+
+        event.type =
+            InputEventType::MouseMove;
+
+        event.mousePosition =
+            m_mouse.position();
+
+        pushEvent(event);
+
+        return;
+    }
+
+    // -------------------------
+    // Buttons
+    // -------------------------
+
+    if (type != EV_KEY) {
+        return;
+    }
+
+    MouseButton button =
+        MouseButton::None;
+
+    switch (code) {
+
+        case BTN_LEFT:
+            button = MouseButton::Left;
+            break;
+
+        case BTN_RIGHT:
+            button = MouseButton::Right;
+            break;
+
+        case BTN_MIDDLE:
+            button = MouseButton::Middle;
+            break;
+
+        case BTN_BACK:
+            button = MouseButton::Back;
+            break;
+
+        case BTN_FORWARD:
+            button = MouseButton::Forward;
+            break;
+
+        default:
+            return;
+    }
+
+    InputEvent event {};
+
+    event.mousePosition =
+        m_mouse.position();
+
+    event.mouseButton = button;
+
+    if (value == 1) {
+
+        event.type =
+            InputEventType::MouseButtonDown;
+
+        pushEvent(event);
+    }
+    else if (value == 0) {
+
+        event.type =
+            InputEventType::MouseButtonUp;
+
+        pushEvent(event);
+    }
+}
+
+void InputManager::handleKeyboardEvent(
+    unsigned short type,
+    unsigned short code,
+    int value
+)
+{
+    if (type != EV_KEY) {
+        return;
+    }
+
+    bool pressed = value == 1;
+    bool repeated = value == 2;
+    bool released = value == 0;
+
+    if (repeated) {
+        return;
+    }
+
+    // -------------------------
+    // Alt
+    // -------------------------
+
+    if (
+        code == KEY_LEFTALT ||
+        code == KEY_RIGHTALT
+    ) {
+        if (pressed) {
+            m_altDown = true;
+        }
+
+        if (released) {
+            m_altDown = false;
+        }
+    }
+
+    // -------------------------
+    // Ctrl
+    // -------------------------
+
+    if (
+        code == KEY_LEFTCTRL ||
+        code == KEY_RIGHTCTRL
+    ) {
+        if (pressed) {
+            m_ctrlDown = true;
+        }
+
+        if (released) {
+            m_ctrlDown = false;
+        }
+    }
+
+    // -------------------------
+    // Shift
+    // -------------------------
+
+    if (
+        code == KEY_LEFTSHIFT ||
+        code == KEY_RIGHTSHIFT
+    ) {
+        if (pressed) {
+            m_shiftDown = true;
+        }
+
+        if (released) {
+            m_shiftDown = false;
+        }
+    }
+
+    Key key = translateKey(code);
+
+    if (key == Key::Unknown) {
+        return;
+    }
+
+    InputEvent event {};
+
+    event.key = key;
+
+    event.alt = m_altDown;
+    event.ctrl = m_ctrlDown;
+    event.shift = m_shiftDown;
+
+    if (pressed) {
+
+        event.type =
+            InputEventType::KeyDown;
+
+        pushEvent(event);
+    }
+    else if (released) {
+
+        event.type =
+            InputEventType::KeyUp;
+
+        pushEvent(event);
+    }
+}
+
+Key InputManager::translateKey(
+    unsigned short linuxKeyCode
+)
+{
+    switch (linuxKeyCode) {
+
         case KEY_TAB:
             return Key::Tab;
 
@@ -56,227 +499,4 @@ static Key translateKey(unsigned int code)
         default:
             return Key::Unknown;
     }
-}
-
-InputManager::InputManager(
-    int screenWidth,
-    int screenHeight
-)
-    : m_screenWidth(screenWidth),
-      m_screenHeight(screenHeight)
-{
-}
-
-InputManager::~InputManager()
-{
-    if (m_mouseFd >= 0) {
-        close(m_mouseFd);
-    }
-
-    if (m_keyboardFd >= 0) {
-        close(m_keyboardFd);
-    }
-}
-
-bool InputManager::openMouse(const char* devicePath)
-{
-    m_mouseFd = open(
-        devicePath,
-        O_RDONLY | O_NONBLOCK
-    );
-
-    return m_mouseFd >= 0;
-}
-
-bool InputManager::openKeyboard(const char* devicePath)
-{
-    m_keyboardFd = open(
-        devicePath,
-        O_RDONLY | O_NONBLOCK
-    );
-
-    return m_keyboardFd >= 0;
-}
-
-bool InputManager::pollEvent(InputEvent &event)
-{
-    struct input_event linuxEvent;
-    // ---------------------------
-    // Mouse Events
-    // ---------------------------
-    if (m_mouseFd >= 0) {
-        ssize_t bytesRead = read(
-            m_mouseFd,
-            &linuxEvent,
-            sizeof(linuxEvent)
-        );
-
-        if (bytesRead == sizeof(linuxEvent)) {
-            if (linuxEvent.type == EV_REL) {
-                if (linuxEvent.code == REL_X) {
-                    m_mousePosition.x += linuxEvent.value;
-                }
-
-                if (linuxEvent.code == REL_Y) {
-                    m_mousePosition.y += linuxEvent.value;
-                }
-
-                m_mousePosition.x = std::clamp(
-                    m_mousePosition.x,
-                    0,
-                    m_screenWidth - 1
-                );
-
-                m_mousePosition.y = std::clamp(
-                    m_mousePosition.y,
-                    0,
-                    m_screenHeight - 1
-                );
-
-                event = InputEvent{};
-                event.type = InputEventType::MouseMove;
-                event.mousePosition = m_mousePosition;
-
-                return true;
-            }
-
-            if (linuxEvent.type == EV_KEY) {
-                if (linuxEvent.code == BTN_LEFT) {
-                    event = InputEvent{};
-                    event.mousePosition = m_mousePosition;
-                    event.mouseButton = MouseButton::Left;
-
-                    if (linuxEvent.value == 1) {
-                        event.type = InputEventType::MouseButtonDown;
-                        return true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        event.type = InputEventType::MouseButtonUp;
-                        return true;
-                    }
-                }
-
-                if (linuxEvent.code == BTN_RIGHT) {
-                    event = InputEvent{};
-                    event.mousePosition = m_mousePosition;
-                    event.mouseButton = MouseButton::Right;
-
-                    if (linuxEvent.value == 1) {
-                        event.type = InputEventType::MouseButtonDown;
-                        return true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        event.type = InputEventType::MouseButtonUp;
-                        return true;
-                    }
-                }
-
-                if (linuxEvent.code == BTN_BACK) {
-                    event = InputEvent{};
-                    event.mousePosition = m_mousePosition;
-                    event.mouseButton = MouseButton::Back;
-
-                    if (linuxEvent.value == 1) {
-                        event.type = InputEventType::MouseButtonDown;
-                        return true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        event.type = InputEventType::MouseButtonUp;
-                        return true;
-                    }
-                }
-                
-                if (linuxEvent.code == BTN_FORWARD) {
-                    event = InputEvent{};
-                    event.mousePosition = m_mousePosition;
-                    event.mouseButton = MouseButton::Forward;
-
-                    if (linuxEvent.value == 1) {
-                        event.type = InputEventType::MouseButtonDown;
-                        return true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        event.type = InputEventType::MouseButtonUp;
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    // ---------------------------
-    // Keyboard Events
-    // ---------------------------
-    if (m_keyboardFd >= 0) {
-        ssize_t bytesRead = read(
-            m_keyboardFd,
-            &linuxEvent,
-            sizeof(linuxEvent)
-        );
-
-        if (bytesRead == sizeof(linuxEvent)) {
-            if (linuxEvent.type == EV_KEY) {
-                // Track Alt State
-                if (linuxEvent.code == KEY_LEFTALT ||
-                    linuxEvent.code == KEY_RIGHTALT)
-                {
-                    if (linuxEvent.value == 1) {
-                        m_altDown = true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        m_altDown = false;
-                    }
-                }
-
-                // Track Ctrl State
-                if (linuxEvent.code == KEY_LEFTCTRL ||
-                    linuxEvent.code == KEY_RIGHTCTRL)
-                {
-                    if (linuxEvent.value == 1) {
-                        m_ctrlDown = true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        m_ctrlDown = false;
-                    }
-                }
-
-                // Track Shift State
-                if (linuxEvent.code == KEY_LEFTSHIFT ||
-                    linuxEvent.code == KEY_RIGHTSHIFT)
-                {
-                    if (linuxEvent.value == 1) {
-                        m_shiftDown = true;
-                    }
-
-                    if (linuxEvent.value == 0) {
-                        m_shiftDown = false;
-                    }
-                }
-
-                event = InputEvent{};
-                event.key = translateKey(linuxEvent.code);
-                
-                event.alt = m_altDown;
-                event.ctrl = m_ctrlDown;
-                event.shift = m_shiftDown;
-
-                if (linuxEvent.value == 1) {
-                    event.type = InputEventType::KeyDown;
-                    return true;
-                }
-
-                if (linuxEvent.value == 0) {
-                    event.type = InputEventType::KeyUp;
-                    return true;
-                }
-            }
-        }
-    }
-
-    return false;
 }

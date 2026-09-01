@@ -52,4 +52,6 @@ echo "Development shell ready."
 echo "Programs are available under /usr/bin"
 echo
 
+/usr/bin/myos-desktop
+
 exec /bin/sh

@@ -4,12 +4,84 @@
 #include "graphics/Surface.hpp"
 
 #include "window/WindowManager.hpp"
+
 #include "input/InputManager.hpp"
+#include "input/Mouse.hpp"
 
 #include <iostream>
 #include <unistd.h>
 
 using namespace myos::graphics;
+
+static void drawCursor(
+    Renderer& renderer,
+    Point position
+)
+{
+    const Color white(
+        255,
+        255,
+        255
+    );
+
+    const Color black(
+        0,
+        0,
+        0
+    );
+
+    static const char* cursorShape[] = {
+        "X...........",
+        "XX..........",
+        "XOX.........",
+        "XOOX........",
+        "XOOOX.......",
+        "XOOOOX......",
+        "XOOOOOX.....",
+        "XOOOOOOX....",
+        "XOOOOOOOX...",
+        "XOOOOXXXXX..",
+        "XOOXOX......",
+        "XOXX.OX.....",
+        "XX...OX.....",
+        "X.....OX....",
+        "......OX....",
+        ".......X...."
+    };
+
+    constexpr int cursorWidth = 12;
+    constexpr int cursorHeight = 16;
+
+    for (
+        int y = 0;
+        y < cursorHeight;
+        ++y
+    ) {
+        for (
+            int x = 0;
+            x < cursorWidth;
+            ++x
+        ) {
+            char pixel =
+                cursorShape[y][x];
+
+            if (pixel == 'X') {
+                renderer.drawPixel(
+                    position.x + x,
+                    position.y + y,
+                    black
+                );
+            }
+            else if (pixel == 'O') {
+                renderer.drawPixel(
+                    position.x + x,
+                    position.y + y,
+                    white
+                );
+            }
+        }
+    }
+}
 
 int main()
 {
@@ -20,11 +92,14 @@ int main()
 
     Framebuffer framebuffer;
 
-    
     if (!framebuffer.open())
     {
-        std::cerr << "[desktop] No usable framebuffer.\n";
-        std::cerr << "[desktop] Check /dev/fb0 and kernel framebuffer support.\n";
+        std::cerr
+            << "[desktop] No usable framebuffer.\n";
+
+        std::cerr
+            << "[desktop] Check /dev/fb0 and kernel framebuffer support.\n";
+
         return 1;
     }
 
@@ -37,24 +112,40 @@ int main()
 
     WindowManager windowManager;
 
-    InputManager inputManager(
+    Mouse mouse(
         framebuffer.width(),
         framebuffer.height()
     );
 
-    // Temporary device paths.
-    // We will verify the correct event numbers next.
-    if (!inputManager.openMouse("/dev/input/event1")) {
-        std::cerr << "[desktop] Failed to open mouse input.\n";
+    InputManager inputManager(mouse);
+
+    // Temporary QEMU paths.
+    if (
+        !inputManager.openKeyboard(
+            "/dev/input/event1"
+        )
+    ) {
+        std::cerr
+            << "[desktop] Failed to open keyboard input.\n";
     }
 
-    if (!inputManager.openKeyboard("/dev/input/event2")) {
-        std::cerr << "[desktop] Failed to open keyboard input.\n";
+    if (
+        !inputManager.openMouse(
+            "/dev/input/event2"
+        )
+    ) {
+        std::cerr
+            << "[desktop] Failed to open mouse input.\n";
+    }
+
+    if (!inputManager.start()) {
+        std::cerr
+            << "[desktop] Failed to start input manager.\n";
     }
 
     windowManager.createWindow(
         "Terminal",
-        Rect{
+        Rect {
             80,
             70,
             420,
@@ -64,7 +155,7 @@ int main()
 
     windowManager.createWindow(
         "Files",
-        Rect{
+        Rect {
             220,
             140,
             420,
@@ -74,7 +165,7 @@ int main()
 
     windowManager.createWindow(
         "Settings",
-        Rect{
+        Rect {
             380,
             100,
             360,
@@ -82,64 +173,75 @@ int main()
         }
     );
 
-    std::cout << "[desktop] Entering desktop loop.\n";
+    std::cout
+        << "[desktop] Entering desktop loop.\n";
 
-    while (true) {
-        // 1. Process input events
+    while (true)
+    {
+        // -------------------------
+        // Input
+        // -------------------------
+
         InputEvent event;
 
-        while (inputManager.pollEvent(event)) {
-
-            if (event.type == InputEventType::MouseMove) {
-                std::cout
-                    << "[input] mouse "
-                    << event.mousePosition.x << ", "
-                    << event.mousePosition.y
-                    << "\n";
-            }
-
-            if (event.type == InputEventType::MouseButtonDown) {
-                std::cout << "[input] mouse button down\n";
-            }
-
-            if (event.type == InputEventType::MouseButtonUp) {
-                std::cout << "[input] mouse button up\n";
-            }
-
-            if (event.type == InputEventType::KeyDown) {
-                std::cout
-                    << "[input] key down"
-                    << " alt=" << event.alt
-                    << " ctrl=" << event.ctrl
-                    << " shift=" << event.shift
-                    << "\n";
-            }
-
+        while (
+            inputManager.popEvent(event)
+        ) {
             windowManager.handleEvent(event);
         }
 
-        // 2. Clear desktop
-        renderer.clear(Color(24, 28, 36));
+        // -------------------------
+        // Desktop background
+        // -------------------------
 
-        // 3. Render windows
-        windowManager.render(renderer);
+        renderer.clear(
+            Color(24, 28, 36)
+        );
 
-        // 4. Render taskbar
+        // -------------------------
+        // Windows
+        // -------------------------
+
+        windowManager.render(
+            renderer
+        );
+
+        // -------------------------
+        // Taskbar
+        // -------------------------
+
         renderer.fillRect(
             0,
             framebuffer.height() - 48,
             framebuffer.width(),
-            48, 
+            48,
             Color(18, 20, 26)
         );
 
-        //5. Present completed frame
-        if (!framebuffer.present(screen)) {
-            std::cerr << "[desktop] Failed to present framebuffer.\n";
+        // -------------------------
+        // Mouse cursor
+        // -------------------------
+
+        drawCursor(
+            renderer,
+            mouse.position()
+        );
+
+        // -------------------------
+        // Present
+        // -------------------------
+
+        if (
+            !framebuffer.present(screen)
+        ) {
+            std::cerr
+                << "[desktop] Failed to present framebuffer.\n";
+
+            inputManager.stop();
+
             return 1;
         }
 
-        // Temporary ~60 FSP loop
         usleep(16000);
     }
 
