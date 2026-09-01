@@ -13,32 +13,43 @@ namespace myos::graphics {
 
 class WindowManager
 {
-    public:
-        Window &createWindow(
-            const std::string &title,
-            const Rect &bounds
-        );
+public:
+    Window &createWindow(
+        const std::string &title,
+        const Rect &bounds
+    );
 
-        void focusWindow(int windowId);
+    void focusWindow(int windowId);
 
-        Window *focusedWindow();
+    Window *focusedWindow();
 
-        const Window *focusedWindow() const;
+    const Window *focusedWindow() const;
 
-        void handleEvent(const InputEvent &event);
+    bool handleEvent(
+        const InputEvent &event
+    );
 
-        Window *windowAt(Point position);
-        
-        const Window *windowAt(Point position) const;
+    Window *windowAt(
+        Point position
+    );
 
-        void focusNextWindow();
+    const Window *windowAt(
+        Point position
+    ) const;
 
-        void render(myos::graphics::Renderer &renderer) const;
+    void focusNextWindow();
 
-    private:
-        std::vector<std::unique_ptr<Window>> m_windows;
-        int m_nextWindowId = 1;
-        int m_focusedWindowId = -1;
-        Window *m_draggedWindo = nullptr;
-        Point m_dragOffset = {};
+    void render(
+        myos::graphics::Renderer &renderer
+    ) const;
+
+private:
+    std::vector<std::unique_ptr<Window>> m_windows;
+
+    int m_nextWindowId = 1;
+    int m_focusedWindowId = -1;
+
+    Window *m_draggedWindo = nullptr;
+
+    Point m_dragOffset {};
 };

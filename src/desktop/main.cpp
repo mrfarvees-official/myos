@@ -8,15 +8,14 @@
 #include "input/InputManager.hpp"
 #include "input/Mouse.hpp"
 
-#include <iostream>
-#include <unistd.h>
 #include <chrono>
+#include <iostream>
 #include <thread>
 
 using namespace myos::graphics;
 
 static void drawCursor(
-    Renderer& renderer,
+    Renderer &renderer,
     Point position
 )
 {
@@ -32,7 +31,7 @@ static void drawCursor(
         0
     );
 
-    static const char* cursorShape[] = {
+    static const char *cursorShape[] = {
         "X...........",
         "XX..........",
         "XOX.........",
@@ -64,7 +63,7 @@ static void drawCursor(
             x < cursorWidth;
             ++x
         ) {
-            char pixel =
+            const char pixel =
                 cursorShape[y][x];
 
             if (pixel == 'X') {
@@ -110,7 +109,9 @@ int main()
         framebuffer.height()
     );
 
-    Renderer renderer(screen);
+    Renderer renderer(
+        screen
+    );
 
     WindowManager windowManager;
 
@@ -119,9 +120,11 @@ int main()
         framebuffer.height()
     );
 
-    InputManager inputManager(mouse);
+    InputManager inputManager(
+        mouse
+    );
 
-    // Temporary QEMU paths.
+    // Temporary fixed QEMU input paths.
     if (
         !inputManager.openKeyboard(
             "/dev/input/event1"
@@ -140,7 +143,8 @@ int main()
             << "[desktop] Failed to open mouse input.\n";
     }
 
-    if (!inputManager.start()) {
+    if (!inputManager.start())
+    {
         std::cerr
             << "[desktop] Failed to start input manager.\n";
     }
@@ -178,62 +182,140 @@ int main()
     std::cout
         << "[desktop] Entering desktop loop.\n";
 
-    using Clock = std::chrono::steady_clock;
+    using Clock =
+        std::chrono::steady_clock;
 
     constexpr auto frameDuration =
-        std::chrono::microseconds(16667);
+        std::chrono::microseconds(
+            16667
+        );
+
+    // First frame must always be rendered.
+    bool needsRender =
+        true;
+
+    Point lastMousePosition =
+        mouse.position();
 
     while (true)
     {
-        auto frameStart = Clock::now();
+        const auto frameStart =
+            Clock::now();
+
+        // -----------------------------------
+        // Process queued input
+        // -----------------------------------
 
         InputEvent event;
 
-        while (inputManager.popEvent(event)) {
-            windowManager.handleEvent(event);
+        while (
+            inputManager.popEvent(event)
+        ) {
+            if (
+                windowManager.handleEvent(
+                    event
+                )
+            ) {
+                needsRender =
+                    true;
+            }
         }
 
-        renderer.clear(
-            Color(24, 28, 36)
-        );
+        // -----------------------------------
+        // Detect cursor movement
+        // -----------------------------------
 
-        windowManager.render(
-            renderer
-        );
+        const Point currentMousePosition =
+            mouse.position();
 
-        renderer.fillRect(
-            0,
-            framebuffer.height() - 48,
-            framebuffer.width(),
-            48,
-            Color(18, 20, 26)
-        );
+        if (
+            currentMousePosition.x !=
+                lastMousePosition.x ||
+            currentMousePosition.y !=
+                lastMousePosition.y
+        ) {
+            lastMousePosition =
+                currentMousePosition;
 
-        drawCursor(
-            renderer,
-            mouse.position()
-        );
-
-        if (!framebuffer.present(screen)) {
-            std::cerr
-                << "[desktop] Failed to present framebuffer.\n";
-
-            inputManager.stop();
-
-            return 1;
+            needsRender =
+                true;
         }
 
-        auto frameEnd = Clock::now();
+        // -----------------------------------
+        // Render only when necessary
+        // -----------------------------------
 
-        auto elapsed =
-            frameEnd - frameStart;
+        if (needsRender)
+        {
+            // Desktop background
+            renderer.clear(
+                Color(
+                    24,
+                    28,
+                    36
+                )
+            );
 
-        if (elapsed < frameDuration) {
+            // Windows
+            windowManager.render(
+                renderer
+            );
+
+            // Taskbar
+            renderer.fillRect(
+                0,
+                framebuffer.height() - 48,
+                framebuffer.width(),
+                48,
+                Color(
+                    18,
+                    20,
+                    26
+                )
+            );
+
+            // Cursor must remain top-most.
+            drawCursor(
+                renderer,
+                currentMousePosition
+            );
+
+            // Copy completed surface to framebuffer.
+            if (
+                !framebuffer.present(
+                    screen
+                )
+            ) {
+                std::cerr
+                    << "[desktop] Failed to present framebuffer.\n";
+
+                inputManager.stop();
+
+                return 1;
+            }
+
+            needsRender =
+                false;
+        }
+
+        // -----------------------------------
+        // Frame pacing
+        // -----------------------------------
+
+        const auto elapsed =
+            Clock::now() -
+            frameStart;
+
+        if (
+            elapsed <
+            frameDuration
+        ) {
             std::this_thread::sleep_for(
-                frameDuration - elapsed
+                frameDuration -
+                elapsed
             );
         }
     }
-    
+
     return 0;
 }
