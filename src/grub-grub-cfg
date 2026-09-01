@@ -5,7 +5,7 @@ set gfxmode=1024x768x32
 set gfxpayload=keep
 
 menuentry "Install MyOS" {
-    #linux /boot/vmlinuz console=ttyS0,115200 console=tty0 rdinit=/init tsc=unstable
-    linux /boot/vmlinuz console=ttyS0 rdinit=/init tsc=unstable
+    linux /boot/vmlinuz console=ttyS0,115200 console=tty0 rdinit=/init tsc=unstable
+    #linux /boot/vmlinuz console=ttyS0 rdinit=/init tsc=unstable
     initrd /boot/initramfs.img
 }

@@ -107,8 +107,8 @@ bool WindowManager::handleEvent(
     if (
         event.type ==
             InputEventType::KeyDown &&
-        event.ctrl &&
-        event.key == Key::Enter
+        event.alt &&
+        event.key == Key::Tab
     ) {
         if (m_windows.size() < 2) {
             return false;

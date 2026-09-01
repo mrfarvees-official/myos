@@ -3,6 +3,8 @@
 #include "graphics/Renderer.hpp"
 #include "graphics/Surface.hpp"
 
+#include "geometry/DirtyRegion.hpp"
+
 #include "window/WindowManager.hpp"
 
 #include "input/InputManager.hpp"
@@ -13,6 +15,24 @@
 #include <thread>
 
 using namespace myos::graphics;
+
+static Rect cursorBounds(
+    Point position
+)
+{
+    constexpr int cursorWidth =
+        12;
+
+    constexpr int cursorHeight =
+        16;
+
+    return Rect {
+        position.x,
+        position.y,
+        cursorWidth,
+        cursorHeight
+    };
+}
 
 static void drawCursor(
     Renderer &renderer,
@@ -50,8 +70,11 @@ static void drawCursor(
         ".......X...."
     };
 
-    constexpr int cursorWidth = 12;
-    constexpr int cursorHeight = 16;
+    constexpr int cursorWidth =
+        12;
+
+    constexpr int cursorHeight =
+        16;
 
     for (
         int y = 0;
@@ -190,9 +213,20 @@ int main()
             16667
         );
 
-    // First frame must always be rendered.
-    bool needsRender =
-        true;
+    const Rect desktopBounds {
+        0,
+        0,
+        framebuffer.width(),
+        framebuffer.height()
+    };
+
+    DirtyRegion dirtyRegion(
+        desktopBounds
+    );
+
+    // First frame must always render
+    // the complete desktop.
+    dirtyRegion.invalidateAll();
 
     Point lastMousePosition =
         mouse.position();
@@ -216,8 +250,17 @@ int main()
                     event
                 )
             ) {
-                needsRender =
-                    true;
+                // Temporary compatibility behavior.
+                //
+                // WindowManager currently only tells us
+                // that visible state changed.
+                //
+                // It does not yet tell us exactly which
+                // desktop rectangles changed.
+                //
+                // Precise window invalidation comes in
+                // the next stage.
+                dirtyRegion.invalidateAll();
             }
         }
 
@@ -234,19 +277,40 @@ int main()
             currentMousePosition.y !=
                 lastMousePosition.y
         ) {
+            // The old cursor area must be restored.
+            dirtyRegion.invalidate(
+                cursorBounds(
+                    lastMousePosition
+                )
+            );
+
+            // The cursor must be drawn in
+            // its new location.
+            dirtyRegion.invalidate(
+                cursorBounds(
+                    currentMousePosition
+                )
+            );
+
             lastMousePosition =
                 currentMousePosition;
-
-            needsRender =
-                true;
         }
 
         // -----------------------------------
-        // Render only when necessary
+        // Render only when something changed
         // -----------------------------------
 
-        if (needsRender)
+        if (!dirtyRegion.empty())
         {
+            // NOTE:
+            //
+            // We are tracking dirty regions now,
+            // but rendering is intentionally still
+            // full-screen at this stage.
+            //
+            // Partial rendering will be introduced
+            // after window invalidation is correct.
+
             // Desktop background
             renderer.clear(
                 Color(
@@ -280,7 +344,8 @@ int main()
                 currentMousePosition
             );
 
-            // Copy completed surface to framebuffer.
+            // Still full-surface presentation
+            // for this stage.
             if (
                 !framebuffer.present(
                     screen
@@ -294,8 +359,9 @@ int main()
                 return 1;
             }
 
-            needsRender =
-                false;
+            // Everything currently dirty has
+            // now been represented on screen.
+            dirtyRegion.clear();
         }
 
         // -----------------------------------
