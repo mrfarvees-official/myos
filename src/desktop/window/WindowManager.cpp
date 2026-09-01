@@ -2,7 +2,15 @@
 
 #include <algorithm>
 
+#include "../display/DisplayMetrics.hpp"
 #include "../graphics/Renderer.hpp"
+
+WindowManager::WindowManager(
+    const DisplayMetrics &displayMetrics
+)
+    : m_displayMetrics(displayMetrics)
+{
+}
 
 Window &WindowManager::createWindow(
     const std::string &title,
@@ -16,7 +24,8 @@ Window &WindowManager::createWindow(
         std::make_unique<Window>(
             id,
             title,
-            bounds
+            bounds,
+            m_displayMetrics
         );
 
     Window &reference =
@@ -26,7 +35,9 @@ Window &WindowManager::createWindow(
         std::move(window)
     );
 
-    focusWindow(id);
+    focusWindow(
+        id
+    );
 
     return reference;
 }
@@ -41,27 +52,42 @@ void WindowManager::focusWindow(
         [windowId](
             const std::unique_ptr<Window> &window
         ) {
-            return window->id() == windowId;
+            return window->id() ==
+                windowId;
         }
     );
 
-    if (it == m_windows.end()) {
+    if (
+        it ==
+        m_windows.end()
+    ) {
         return;
     }
 
-    for (auto &window : m_windows) {
-        window->setFocused(false);
+    for (
+        auto &window :
+        m_windows
+    ) {
+        window->setFocused(
+            false
+        );
     }
 
-    (*it)->setFocused(true);
+    (*it)->setFocused(
+        true
+    );
 
     m_focusedWindowId =
         windowId;
 
     auto window =
-        std::move(*it);
+        std::move(
+            *it
+        );
 
-    m_windows.erase(it);
+    m_windows.erase(
+        it
+    );
 
     m_windows.push_back(
         std::move(window)
@@ -70,7 +96,10 @@ void WindowManager::focusWindow(
 
 Window *WindowManager::focusedWindow()
 {
-    for (auto &window : m_windows) {
+    for (
+        auto &window :
+        m_windows
+    ) {
         if (
             window->id() ==
             m_focusedWindowId
@@ -84,7 +113,10 @@ Window *WindowManager::focusedWindow()
 
 const Window *WindowManager::focusedWindow() const
 {
-    for (const auto &window : m_windows) {
+    for (
+        const auto &window :
+        m_windows
+    ) {
         if (
             window->id() ==
             m_focusedWindowId
@@ -96,27 +128,72 @@ const Window *WindowManager::focusedWindow() const
     return nullptr;
 }
 
-bool WindowManager::handleEvent(
+WindowUpdate WindowManager::handleEvent(
     const InputEvent &event
 )
 {
+    WindowUpdate update;
+
     // -----------------------------------
-    // Keyboard shortcut
+    // Alt + Tab
     // -----------------------------------
 
     if (
         event.type ==
             InputEventType::KeyDown &&
         event.alt &&
-        event.key == Key::Tab
+        event.key ==
+            Key::Tab
     ) {
-        if (m_windows.size() < 2) {
-            return false;
+        if (
+            m_windows.size() <
+            2
+        ) {
+            return update;
+        }
+
+        const Window *previousFocused =
+            focusedWindow();
+
+        Rect previousBounds {};
+
+        bool hadPrevious =
+            false;
+
+        if (
+            previousFocused !=
+            nullptr
+        ) {
+            previousBounds =
+                previousFocused->bounds();
+
+            hadPrevious =
+                true;
         }
 
         focusNextWindow();
 
-        return true;
+        const Window *newFocused =
+            focusedWindow();
+
+        if (
+            hadPrevious
+        ) {
+            update.invalidate(
+                previousBounds
+            );
+        }
+
+        if (
+            newFocused !=
+            nullptr
+        ) {
+            update.invalidate(
+                newFocused->bounds()
+            );
+        }
+
+        return update;
     }
 
     // -----------------------------------
@@ -134,15 +211,40 @@ bool WindowManager::handleEvent(
                 event.mousePosition
             );
 
-        if (!window) {
-            return false;
+        if (
+            window ==
+            nullptr
+        ) {
+            return update;
         }
+
+        const int selectedWindowId =
+            window->id();
 
         const int previousFocusedWindowId =
             m_focusedWindowId;
 
-        const int selectedWindowId =
-            window->id();
+        Rect previousFocusedBounds {};
+
+        bool hadPreviousFocused =
+            false;
+
+        const Window *previousFocused =
+            focusedWindow();
+
+        if (
+            previousFocused !=
+            nullptr
+        ) {
+            previousFocusedBounds =
+                previousFocused->bounds();
+
+            hadPreviousFocused =
+                true;
+        }
+
+        const Rect selectedBounds =
+            window->bounds();
 
         focusWindow(
             selectedWindowId
@@ -152,11 +254,30 @@ bool WindowManager::handleEvent(
             previousFocusedWindowId !=
             m_focusedWindowId;
 
+        if (
+            focusChanged
+        ) {
+            if (
+                hadPreviousFocused
+            ) {
+                update.invalidate(
+                    previousFocusedBounds
+                );
+            }
+
+            update.invalidate(
+                selectedBounds
+            );
+        }
+
         window =
             focusedWindow();
 
-        if (!window) {
-            return focusChanged;
+        if (
+            window ==
+            nullptr
+        ) {
+            return update;
         }
 
         if (
@@ -170,16 +291,17 @@ bool WindowManager::handleEvent(
             const Rect &bounds =
                 window->bounds();
 
-            m_dragOffset = Point {
-                event.mousePosition.x -
-                    bounds.x,
+            m_dragOffset =
+                Point {
+                    event.mousePosition.x -
+                        bounds.x,
 
-                event.mousePosition.y -
-                    bounds.y
-            };
+                    event.mousePosition.y -
+                        bounds.y
+                };
         }
 
-        return focusChanged;
+        return update;
     }
 
     // -----------------------------------
@@ -189,7 +311,8 @@ bool WindowManager::handleEvent(
     if (
         event.type ==
             InputEventType::MouseMove &&
-        m_draggedWindo != nullptr
+        m_draggedWindo !=
+            nullptr
     ) {
         const int newX =
             event.mousePosition.x -
@@ -199,14 +322,16 @@ bool WindowManager::handleEvent(
             event.mousePosition.y -
             m_dragOffset.y;
 
-        const Rect &bounds =
+        const Rect oldBounds =
             m_draggedWindo->bounds();
 
         if (
-            bounds.x == newX &&
-            bounds.y == newY
+            oldBounds.x ==
+                newX &&
+            oldBounds.y ==
+                newY
         ) {
-            return false;
+            return update;
         }
 
         m_draggedWindo->setPosition(
@@ -214,7 +339,18 @@ bool WindowManager::handleEvent(
             newY
         );
 
-        return true;
+        const Rect newBounds =
+            m_draggedWindo->bounds();
+
+        update.invalidate(
+            oldBounds
+        );
+
+        update.invalidate(
+            newBounds
+        );
+
+        return update;
     }
 
     // -----------------------------------
@@ -230,10 +366,10 @@ bool WindowManager::handleEvent(
         m_draggedWindo =
             nullptr;
 
-        return false;
+        return update;
     }
 
-    return false;
+    return update;
 }
 
 Window *WindowManager::windowAt(
@@ -241,12 +377,16 @@ Window *WindowManager::windowAt(
 )
 {
     for (
-        auto it = m_windows.rbegin();
-        it != m_windows.rend();
+        auto it =
+            m_windows.rbegin();
+        it !=
+            m_windows.rend();
         ++it
     ) {
         if (
-            (*it)->contains(position)
+            (*it)->contains(
+                position
+            )
         ) {
             return it->get();
         }
@@ -260,12 +400,16 @@ const Window *WindowManager::windowAt(
 ) const
 {
     for (
-        auto it = m_windows.rbegin();
-        it != m_windows.rend();
+        auto it =
+            m_windows.rbegin();
+        it !=
+            m_windows.rend();
         ++it
     ) {
         if (
-            (*it)->contains(position)
+            (*it)->contains(
+                position
+            )
         ) {
             return it->get();
         }
@@ -276,7 +420,10 @@ const Window *WindowManager::windowAt(
 
 void WindowManager::focusNextWindow()
 {
-    if (m_windows.size() < 2) {
+    if (
+        m_windows.size() <
+        2
+    ) {
         return;
     }
 
@@ -289,17 +436,26 @@ void WindowManager::focusNextWindow()
 
     m_windows.insert(
         m_windows.begin(),
-        std::move(currentWindow)
+        std::move(
+            currentWindow
+        )
     );
 
-    for (auto &window : m_windows) {
-        window->setFocused(false);
+    for (
+        auto &window :
+        m_windows
+    ) {
+        window->setFocused(
+            false
+        );
     }
 
     Window *nextWindow =
         m_windows.back().get();
 
-    nextWindow->setFocused(true);
+    nextWindow->setFocused(
+        true
+    );
 
     m_focusedWindowId =
         nextWindow->id();
@@ -309,7 +465,12 @@ void WindowManager::render(
     myos::graphics::Renderer &renderer
 ) const
 {
-    for (const auto &window : m_windows) {
-        window->render(renderer);
+    for (
+        const auto &window :
+        m_windows
+    ) {
+        window->render(
+            renderer
+        );
     }
 }

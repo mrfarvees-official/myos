@@ -4,47 +4,71 @@
 
 #include "../geometry/Rect.hpp"
 
+class DisplayMetrics;
+
 namespace myos::graphics {
     class Renderer;
 }
 
 class Window
 {
-    public: 
-        Window(
-            int id,
-            const std::string &title,
-            const Rect &bounds
-        );
+public:
+    Window(
+        int id,
+        const std::string &title,
+        const Rect &bounds,
+        const DisplayMetrics &displayMetrics
+    );
 
-        int id() const;
-        
-        const std::string  &title() const;
-        
-        const Rect &bounds() const;
-        
-        void setBounds(const Rect &bounds);
+    int id() const;
 
-        void setPosition(int x, int y);
+    const std::string &title() const;
 
-        void moveBy(int dx, int dy);
+    const Rect &bounds() const;
 
-        bool isFocused() const;
+    void setBounds(
+        const Rect &bounds
+    );
 
-        void setFocused(bool focused);
+    void setPosition(
+        int x,
+        int y
+    );
 
-        Rect titleBarBounds() const;
+    void moveBy(
+        int dx,
+        int dy
+    );
 
-        bool contains(Point point) const;
+    bool isFocused() const;
 
-        bool titleBarContains(Point point) const;
+    void setFocused(
+        bool focused
+    );
 
-        void render(myos::graphics::Renderer &renderer) const;
+    Rect titleBarBounds() const;
 
-    private:
-        int m_id;
-        std::string m_title;
-        Rect m_bounds;
-        bool m_focused = false;
-        static constexpr int TitleBarHeight = 28;
+    bool contains(
+        Point point
+    ) const;
+
+    bool titleBarContains(
+        Point point
+    ) const;
+
+    void render(
+        myos::graphics::Renderer &renderer
+    ) const;
+
+private:
+    int m_id;
+
+    std::string m_title;
+
+    Rect m_bounds;
+
+    bool m_focused =
+        false;
+
+    const DisplayMetrics &m_displayMetrics;
 };

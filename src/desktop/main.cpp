@@ -4,9 +4,8 @@
 #include "graphics/Surface.hpp"
 
 #include "geometry/DirtyRegion.hpp"
-
 #include "window/WindowManager.hpp"
-
+#include "display/DisplayMetrics.hpp"
 #include "input/InputManager.hpp"
 #include "input/Mouse.hpp"
 
@@ -17,8 +16,7 @@
 using namespace myos::graphics;
 
 static Rect cursorBounds(
-    Point position
-)
+    Point position)
 {
     constexpr int cursorWidth =
         12;
@@ -26,30 +24,26 @@ static Rect cursorBounds(
     constexpr int cursorHeight =
         16;
 
-    return Rect {
+    return Rect{
         position.x,
         position.y,
         cursorWidth,
-        cursorHeight
-    };
+        cursorHeight};
 }
 
 static void drawCursor(
     Renderer &renderer,
-    Point position
-)
+    Point position)
 {
     const Color white(
         255,
         255,
-        255
-    );
+        255);
 
     const Color black(
         0,
         0,
-        0
-    );
+        0);
 
     static const char *cursorShape[] = {
         "X...........",
@@ -67,8 +61,7 @@ static void drawCursor(
         "XX...OX.....",
         "X.....OX....",
         "......OX....",
-        ".......X...."
-    };
+        ".......X...."};
 
     constexpr int cursorWidth =
         12;
@@ -79,29 +72,29 @@ static void drawCursor(
     for (
         int y = 0;
         y < cursorHeight;
-        ++y
-    ) {
+        ++y)
+    {
         for (
             int x = 0;
             x < cursorWidth;
-            ++x
-        ) {
+            ++x)
+        {
             const char pixel =
                 cursorShape[y][x];
 
-            if (pixel == 'X') {
+            if (pixel == 'X')
+            {
                 renderer.drawPixel(
                     position.x + x,
                     position.y + y,
-                    black
-                );
+                    black);
             }
-            else if (pixel == 'O') {
+            else if (pixel == 'O')
+            {
                 renderer.drawPixel(
                     position.x + x,
                     position.y + y,
-                    white
-                );
+                    white);
             }
         }
     }
@@ -127,41 +120,40 @@ int main()
         return 1;
     }
 
-    Surface screen(
+    DisplayMetrics display(
         framebuffer.width(),
-        framebuffer.height()
-    );
+        framebuffer.height());
+
+    Surface screen(
+        display.width(),
+        display.height());
 
     Renderer renderer(
-        screen
-    );
+        screen);
 
-    WindowManager windowManager;
+    WindowManager windowManager(
+        display);
 
     Mouse mouse(
-        framebuffer.width(),
-        framebuffer.height()
-    );
+        display.width(),
+        display.height());
 
     InputManager inputManager(
-        mouse
-    );
+        mouse);
 
     // Temporary fixed QEMU input paths.
     if (
         !inputManager.openKeyboard(
-            "/dev/input/event1"
-        )
-    ) {
+            "/dev/input/event1"))
+    {
         std::cerr
             << "[desktop] Failed to open keyboard input.\n";
     }
 
     if (
         !inputManager.openMouse(
-            "/dev/input/event2"
-        )
-    ) {
+            "/dev/input/event2"))
+    {
         std::cerr
             << "[desktop] Failed to open mouse input.\n";
     }
@@ -174,33 +166,27 @@ int main()
 
     windowManager.createWindow(
         "Terminal",
-        Rect {
+        Rect{
             80,
             70,
             420,
-            280
-        }
-    );
+            280});
 
     windowManager.createWindow(
         "Files",
-        Rect {
+        Rect{
             220,
             140,
             420,
-            300
-        }
-    );
+            300});
 
     windowManager.createWindow(
         "Settings",
-        Rect {
+        Rect{
             380,
             100,
             360,
-            260
-        }
-    );
+            260});
 
     std::cout
         << "[desktop] Entering desktop loop.\n";
@@ -210,19 +196,16 @@ int main()
 
     constexpr auto frameDuration =
         std::chrono::microseconds(
-            16667
-        );
+            16667);
 
-    const Rect desktopBounds {
+    const Rect desktopBounds{
         0,
         0,
-        framebuffer.width(),
-        framebuffer.height()
-    };
+        display.width(),
+        display.height()};
 
     DirtyRegion dirtyRegion(
-        desktopBounds
-    );
+        desktopBounds);
 
     // First frame must always render
     // the complete desktop.
@@ -243,24 +226,19 @@ int main()
         InputEvent event;
 
         while (
-            inputManager.popEvent(event)
-        ) {
-            if (
+            inputManager.popEvent(
+                event))
+        {
+            const WindowUpdate update =
                 windowManager.handleEvent(
-                    event
-                )
-            ) {
-                // Temporary compatibility behavior.
-                //
-                // WindowManager currently only tells us
-                // that visible state changed.
-                //
-                // It does not yet tell us exactly which
-                // desktop rectangles changed.
-                //
-                // Precise window invalidation comes in
-                // the next stage.
-                dirtyRegion.invalidateAll();
+                    event);
+
+            for (
+                const Rect &dirtyRect :
+                update.dirtyRects)
+            {
+                dirtyRegion.invalidate(
+                    dirtyRect);
             }
         }
 
@@ -275,22 +253,18 @@ int main()
             currentMousePosition.x !=
                 lastMousePosition.x ||
             currentMousePosition.y !=
-                lastMousePosition.y
-        ) {
+                lastMousePosition.y)
+        {
             // The old cursor area must be restored.
             dirtyRegion.invalidate(
                 cursorBounds(
-                    lastMousePosition
-                )
-            );
+                    lastMousePosition));
 
             // The cursor must be drawn in
             // its new location.
             dirtyRegion.invalidate(
                 cursorBounds(
-                    currentMousePosition
-                )
-            );
+                    currentMousePosition));
 
             lastMousePosition =
                 currentMousePosition;
@@ -316,41 +290,34 @@ int main()
                 Color(
                     24,
                     28,
-                    36
-                )
-            );
+                    36));
 
             // Windows
             windowManager.render(
-                renderer
-            );
+                renderer);
 
             // Taskbar
             renderer.fillRect(
                 0,
-                framebuffer.height() - 48,
-                framebuffer.width(),
-                48,
+                display.height() - display.taskbarHeight(),
+                display.width(),
+                display.taskbarHeight(),
                 Color(
                     18,
                     20,
-                    26
-                )
-            );
+                    26));
 
             // Cursor must remain top-most.
             drawCursor(
                 renderer,
-                currentMousePosition
-            );
+                currentMousePosition);
 
             // Still full-surface presentation
             // for this stage.
             if (
                 !framebuffer.present(
-                    screen
-                )
-            ) {
+                    screen))
+            {
                 std::cerr
                     << "[desktop] Failed to present framebuffer.\n";
 
@@ -374,12 +341,11 @@ int main()
 
         if (
             elapsed <
-            frameDuration
-        ) {
+            frameDuration)
+        {
             std::this_thread::sleep_for(
                 frameDuration -
-                elapsed
-            );
+                elapsed);
         }
     }
 

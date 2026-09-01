@@ -104,6 +104,8 @@ DESKTOP_CXXFLAGS := \
 	-O2 \
 	-Wall \
 	-Wextra \
+	-MMD \
+	-MP \
 	-I$(DESKTOP_SRC_DIR)
 
 
@@ -838,10 +840,10 @@ dev_gui: build_dev_initramfs_img
 		-cpu host \
 		-kernel "$(KERNEL)" \
 		-initrd "$(DEV_INITRAMFS)" \
-		-append "console=ttyS0 rdinit=/init" \
+		-append "console=ttyS0 rdinit=/init video=1920x1080@60" \
 		-netdev user,id=myosnet,hostfwd=tcp:127.0.0.1:2222-:22 \
 		-device virtio-net-pci,netdev=myosnet \
-		-device VGA \
+		-device virtio-vga \
 		-display gtk,grab-on-hover=on \
 		-serial stdio
 

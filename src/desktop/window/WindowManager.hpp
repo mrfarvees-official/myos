@@ -7,25 +7,51 @@
 #include "Window.hpp"
 #include "../input/InputEvent.hpp"
 
+class DisplayMetrics;
+
 namespace myos::graphics {
     class Renderer;
 }
 
+struct WindowUpdate
+{
+    bool changed = false;
+
+    std::vector<Rect> dirtyRects;
+
+    void invalidate(
+        const Rect &rect
+    )
+    {
+        dirtyRects.push_back(
+            rect
+        );
+
+        changed = true;
+    }
+};
+
 class WindowManager
 {
 public:
+    explicit WindowManager(
+        const DisplayMetrics &displayMetrics
+    );
+
     Window &createWindow(
         const std::string &title,
         const Rect &bounds
     );
 
-    void focusWindow(int windowId);
+    void focusWindow(
+        int windowId
+    );
 
     Window *focusedWindow();
 
     const Window *focusedWindow() const;
 
-    bool handleEvent(
+    WindowUpdate handleEvent(
         const InputEvent &event
     );
 
@@ -44,6 +70,8 @@ public:
     ) const;
 
 private:
+    const DisplayMetrics &m_displayMetrics;
+
     std::vector<std::unique_ptr<Window>> m_windows;
 
     int m_nextWindowId = 1;
